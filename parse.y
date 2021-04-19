@@ -132,12 +132,25 @@ astmt : lhs ASG exp             {
 lhs	: ID			{ /* BOGUS  - needs to be fixed */
                                   int newReg1 = NextRegister();
                                   int newReg2 = NextRegister();
-                                  int offset = NextOffset(4);
+                                  int offset = lookup($1.str) != NULL ? lookup($1.str)->offset : NextOffset(1);
 				  
                                   $$.targetRegister = newReg2;
                                   $$.type = TYPE_INT;
 
-				  insert($1.str, TYPE_INT, offset);
+                                  if(lookup($1.str) == NULL){
+                                        // printf("Inserting at offset: %d", offset);
+				        insert($1.str, TYPE_INT, offset);
+                                  } //else {
+                                          
+                                //         char temp[80];
+                                //         strcpy(temp, "Current looking for ");
+                                //         strcat(temp, $1.str);
+
+                                //         emitComment(temp);
+                                //         offset = lookup($1.str)->offset;
+
+                                //         printf("Loading from offset: %d", offset);
+                                //   }
 				   
 				  emit(NOLABEL, LOADI, offset, newReg1, EMPTY);
 				  emit(NOLABEL, ADD, 0, newReg1, newReg2);
@@ -189,7 +202,9 @@ exp	: exp '+' exp		{ int newReg = NextRegister();
 
         | ID			{ /* BOGUS  - needs to be fixed */
 	                          int newReg = NextRegister();
-                                  int offset = NextOffset(4);
+                                  int offset = lookup($1.str) != NULL ? lookup($1.str)->offset : NextOffset(1);
+                                  
+                                  printf("Loading value from %d", offset);
 
 	                          $$.targetRegister = newReg;
 				  $$.type = TYPE_INT;
