@@ -86,9 +86,13 @@ union YYSTYPE
 #line 14 "parse.y" /* yacc.c:1909  */
 tokentype token;
         regInfo targetReg;
+
+        // My declarations
+        varList *vList;
+        Type_Expression tex;
        
 
-#line 92 "parse.tab.h" /* yacc.c:1909  */
+#line 96 "parse.tab.h" /* yacc.c:1909  */
 };
 
 typedef union YYSTYPE YYSTYPE;

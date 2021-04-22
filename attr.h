@@ -16,6 +16,19 @@ typedef struct {
         int targetRegister;
         } regInfo;
 
+typedef struct varNode {
+        char* name;
+        struct varNode *next;
+} varNode;
+
+typedef struct varList {
+        varNode *head;
+} varList;
+
+void varList_insert(varList *list, char* var);
+void varList_printList(varList *list);
+
+
 #endif
 
 

@@ -1,0 +1,5 @@
+program main;
+var a, b: integer;
+begin
+	print(x)
+end.

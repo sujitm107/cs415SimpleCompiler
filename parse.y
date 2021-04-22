@@ -13,6 +13,10 @@ char *CommentBuffer;
 
 %union {tokentype token;
         regInfo targetReg;
+
+        // My declarations
+        varList *vList;
+        Type_Expression tex;
        }
 
 %token PROG PERIOD VAR 
@@ -26,6 +30,10 @@ char *CommentBuffer;
 
 %type <targetReg> exp 
 %type <targetReg> lhs 
+// My Type Declarations
+%type <vList> idlist
+%type <tex> stype
+%type <tex> type
 
 %start program
 
@@ -54,11 +62,29 @@ vardcls	: vardcls vardcl ';' { }
 	| error ';' { yyerror("***Error: illegal variable declaration\n");}  
 	;
 
-vardcl	: idlist ':' type {  }
+vardcl	: idlist ':' type { 
+                varNode* ptr = $1->head;
+                while(ptr != NULL){
+                        insert(ptr->name, $3, NextOffset(1));
+                        ptr = ptr->next;
+                }
+
+        }
 	;
 
-idlist	: idlist ',' ID {  }
-        | ID		{  } 
+idlist	: idlist ',' ID { printf("Running idlist \"%s\" ", $3.str); 
+                                varList_insert($1, $3.str);
+                                varList_printList($1);
+                                $$ = $1;
+                        }
+        | ID		{ printf("Running idlist \"%s\" ", $1.str);
+                                varList* list = malloc(sizeof(varList));
+                                list->head = NULL;
+                                varList_insert(list, $1.str);
+                                
+                                printf("\nAdding Node: \"%s\"\n", list->head->name);
+                                $$ = list;
+                         } 
 	;
 
 
@@ -67,8 +93,12 @@ type	: ARRAY '[' ICONST ']' OF stype {  }
         | stype {  }
 	;
 
-stype	: INT {  }
-        | BOOL {  }
+stype	: INT { 
+                $$ = TYPE_INT;
+        }
+        | BOOL { 
+                $$ = TYPE_BOOL; 
+        }
 	;
 
 stmtlist : stmtlist ';' stmt { }
@@ -133,24 +163,17 @@ lhs	: ID			{ /* BOGUS  - needs to be fixed */
                                   int newReg1 = NextRegister();
                                   int newReg2 = NextRegister();
                                   int offset = lookup($1.str) != NULL ? lookup($1.str)->offset : NextOffset(1);
+
+                                  sprintf(CommentBuffer, "Compute address of variable \"%s\" at offset %d in register %d", $1.str, offset, newReg2);
+	                         emitComment(CommentBuffer);
 				  
                                   $$.targetRegister = newReg2;
-                                  $$.type = TYPE_INT;
+
+                                  $$.type = lookup($1.str)->type;
 
                                   if(lookup($1.str) == NULL){
-                                        // printf("Inserting at offset: %d", offset);
 				        insert($1.str, TYPE_INT, offset);
-                                  } //else {
-                                          
-                                //         char temp[80];
-                                //         strcpy(temp, "Current looking for ");
-                                //         strcat(temp, $1.str);
-
-                                //         emitComment(temp);
-                                //         offset = lookup($1.str)->offset;
-
-                                //         printf("Loading from offset: %d", offset);
-                                //   }
+                                  } 
 				   
 				  emit(NOLABEL, LOADI, offset, newReg1, EMPTY);
 				  emit(NOLABEL, ADD, 0, newReg1, newReg2);
@@ -194,20 +217,54 @@ exp	: exp '+' exp		{ int newReg = NextRegister();
 
         | exp '*' exp		{  }
 
-        | exp AND exp		{  } 
+        | exp AND exp		{ int newReg = NextRegister();
+
+                                  if (! (($1.type == TYPE_BOOL) && ($3.type == TYPE_BOOL))){
+    				    printf("*** ERROR ***: Operator types must be Boolean.\n");
+                                  }
+                                  $$.type = $1.type;
+
+                                  $$.targetRegister = newReg;
+                                  emit(NOLABEL, 
+                                       AND_INSTR, 
+                                       $1.targetRegister, 
+                                       $3.targetRegister, 
+                                       newReg); 
+                                } 
 
 
-        | exp OR exp       	{  }
+        | exp OR exp       	{ int newReg = NextRegister();
+
+                                  if (! (($1.type == TYPE_BOOL) && ($3.type == TYPE_BOOL))) {
+    				    printf("*** ERROR ***: Operator types must be Boolean.\n");
+                                  }
+                                  $$.type = $1.type;
+
+                                  $$.targetRegister = newReg;
+                                  emit(NOLABEL, 
+                                       OR_INSTR, 
+                                       $1.targetRegister, 
+                                       $3.targetRegister, 
+                                       newReg); 
+                                }
 
 
         | ID			{ /* BOGUS  - needs to be fixed */
 	                          int newReg = NextRegister();
+                                  
+                                  if( lookup($1.str) == NULL){
+                                        printf("\n***Error: undeclared identifier \"%s\"\n", $1.str);
+                                  } 
+
                                   int offset = lookup($1.str) != NULL ? lookup($1.str)->offset : NextOffset(1);
                                   
-                                  printf("Loading value from %d", offset);
+                                  sprintf(CommentBuffer, "Load RHS value of variable \"%s\" at offset %d", $1.str, offset);
+	                         emitComment(CommentBuffer);
 
 	                          $$.targetRegister = newReg;
-				  $$.type = TYPE_INT;
+                                  $$.type = lookup($1.str)->type;
+				//   $$.type = TYPE_INT;
+
 				  emit(NOLABEL, LOADAI, 0, offset, newReg);
                                   
 	                        }
