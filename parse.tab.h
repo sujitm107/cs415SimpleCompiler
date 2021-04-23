@@ -90,6 +90,7 @@ tokentype token;
         // My declarations
         varList *vList;
         Type_Expression tex;
+        type type;
 
         fstmt forstmt;
         cntrlExp controlStmt;
@@ -98,7 +99,7 @@ tokentype token;
         ifHeadType ifHead;
        
 
-#line 102 "parse.tab.h" /* yacc.c:1909  */
+#line 103 "parse.tab.h" /* yacc.c:1909  */
 };
 
 typedef union YYSTYPE YYSTYPE;

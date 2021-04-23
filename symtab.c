@@ -58,7 +58,7 @@ lookup(char *name) {
 
 
 void 
-insert(char *name, Type_Expression type, int offset) {
+insert(char *name, Type_Expression type, int offset, Var_Type varType) {
   int currentIndex;
   int visitedSlots = 0;
 
@@ -79,6 +79,8 @@ insert(char *name, Type_Expression type, int offset) {
   strcpy(HashTable[currentIndex]->name, name);
   HashTable[currentIndex]->type = type; /* type expression */
   HashTable[currentIndex]->offset = offset; /* in bytes */
+
+  HashTable[currentIndex]->varType = varType; /* Array or Scalar */
 }
 
 static
@@ -94,6 +96,18 @@ TypeToString(Type_Expression type)
   }
 }
 
+static
+char*
+VarTypeToString(Var_Type varType){
+  switch (varType){
+    case TYPE_ARRAY: return ("1-DIM ARRAY"); break;
+    case TYPE_SCALAR: return  ("SCALAR"); break;
+    default: printf(" *** ERROR in routine VarTypeToString \n");
+      return ("ERROR in VarTypeToString: undefined variable type");
+  }
+
+}
+
 
 void 
 PrintSymbolTable() {
@@ -101,9 +115,11 @@ PrintSymbolTable() {
   
   printf("\n --- Symbol Table ---------------\n\n");
   for (i=0; i < HASH_TABLE_SIZE; i++) {
+
     if (HashTable[i] != NULL) {
-      printf("\t \"%s\" of type %s with offset %d\n", 
-		HashTable[i]->name, TypeToString(HashTable[i]->type), HashTable[i]->offset); 
+
+      printf("\t %s \"%s\" of type %s with offset %d\n", 
+		VarTypeToString(HashTable[i]->varType), HashTable[i]->name, TypeToString(HashTable[i]->type), HashTable[i]->offset); 
     }
   }
   printf("\n --------------------------------\n\n");

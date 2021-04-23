@@ -11,11 +11,14 @@ typedef union {int num; char *str;} tokentype;
 
 typedef enum type_expression {TYPE_INT=0, TYPE_BOOL, TYPE_ERROR} Type_Expression;
 
+typedef enum var_Type { TYPE_SCALAR=0, TYPE_ARRAY } Var_Type;
+
 typedef struct {
         Type_Expression type;
         int targetRegister;
         } regInfo;
 
+// My Declarations
 typedef struct varNode {
         char* name;
         struct varNode *next;
@@ -50,6 +53,12 @@ typedef struct ifHeadType{
 typedef struct condExp{
         int targetReg;
 } condExp;
+
+typedef struct type{
+        Type_Expression baseType;
+        Var_Type varType;
+        int varSize;
+} type;
 
 void varList_insert(varList *list, char* var);
 void varList_printList(varList *list);

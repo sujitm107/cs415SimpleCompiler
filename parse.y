@@ -17,6 +17,7 @@ char *CommentBuffer;
         // My declarations
         varList *vList;
         Type_Expression tex;
+        type type;
 
         fstmt forstmt;
         cntrlExp controlStmt;
@@ -39,7 +40,7 @@ char *CommentBuffer;
 // My Type Declarations
 %type <vList> idlist
 %type <tex> stype
-%type <tex> type
+%type <type> type
 %type <forstmt> FOR
 %type <controlStmt> ctrlexp
 %type <conditionStmt> condexp
@@ -76,7 +77,8 @@ vardcls	: vardcls vardcl ';' { }
 vardcl	: idlist ':' type { 
                 varNode* ptr = $1->head;
                 while(ptr != NULL){
-                        insert(ptr->name, $3, NextOffset(1));
+                        insert(ptr->name, $3.baseType, NextOffset($3.varSize), $3.varType);
+                        // NextOffset($3.varSize - 1); //allocate space for entire array if necessary, if it is scalar, the line is negated by the -1 as the scalar's varSize is 1
                         ptr = ptr->next;
                 }
 
@@ -95,9 +97,9 @@ idlist	: idlist ',' ID {     varList_insert($1, $3.str);
 	;
 
 
-type	: ARRAY '[' ICONST ']' OF stype {  }
+type	: ARRAY '[' ICONST ']' OF stype { $$.varType = TYPE_ARRAY; $$.baseType = $6; $$.varSize = $3.num;}
 
-        | stype {  }
+        | stype { $$.varType = TYPE_SCALAR; $$.baseType = $1; $$.varSize = 1;}
 	;
 
 stype	: INT { 
@@ -236,14 +238,14 @@ lhs	: ID			{ /* BOGUS  - needs to be fixed */
                                   int newReg2 = NextRegister();
                                   int offset = lookup($1.str) != NULL ? lookup($1.str)->offset : NextOffset(1);
 
-                                  sprintf(CommentBuffer, "Compute address of variable \"%s\" at offset %d in register %d", $1.str, offset, newReg2);
+                                  sprintf(CommentBuffer, "Compute address of variable \"%s\" with base address %d", $1.str, offset);
 	                         emitComment(CommentBuffer);
 				  
                                   $$.targetRegister = newReg2;
                                   $$.type = lookup($1.str)->type;
 
                                   if(lookup($1.str) == NULL){
-				        insert($1.str, TYPE_INT, offset);
+				        insert($1.str, TYPE_INT, offset, TYPE_SCALAR);
                                   } 
 				   
 				  emit(NOLABEL, LOADI, offset, newReg1, EMPTY);
@@ -252,7 +254,43 @@ lhs	: ID			{ /* BOGUS  - needs to be fixed */
                          	  }
 
 
-                                |  ID '[' exp ']' {   }
+                                |  ID '[' exp ']' { 
+                                        
+                                        int base_address = lookup($1.str)->offset;
+                                        sprintf(CommentBuffer, "Compute address of array \"%s\" with base address %d", $1.str, base_address);
+
+                                        emitComment(CommentBuffer);
+
+                                        //Store final value in here
+                                        int final_reg = NextRegister();
+
+                                        // Load Constant 4 into a register
+                                        int four_reg = NextRegister();
+                                        emit(NOLABEL, LOADI, 4, four_reg, EMPTY);
+
+                                        // Get register the index is stored in [exp]
+                                        int constant_reg = $3.targetRegister;
+
+                                        // Compute the total offset by multilying the index * 4
+                                        int mult_offset_reg = NextRegister();
+                                        emit(NOLABEL, MULT, constant_reg, four_reg, mult_offset_reg);
+                                        
+                                        //Load Base address
+                                        int base_addr_reg = NextRegister();
+                                        emit(NOLABEL, LOADI, base_address, base_addr_reg, EMPTY);
+
+                                        //Compute Total Offset by adding mult_offset and base address
+                                        int total_addr_reg = NextRegister();
+                                        emit(NOLABEL, ADD, base_addr_reg, mult_offset_reg, total_addr_reg);
+
+                                        //add total offset to base addr r0(1024) to get actual value
+                                        emit(NOLABEL, ADD, 0, total_addr_reg, final_reg);
+
+                                        $$.targetRegister = final_reg;
+                                        $$.type = lookup($1.str)->type;
+         
+
+                                  }
                                 ;
 
 
@@ -353,7 +391,41 @@ exp	: exp '+' exp		{ int newReg = NextRegister();
                                   
 	                        }
 
-        | ID '[' exp ']'	{   }
+        | ID '[' exp ']'	{  
+                                        int base_address = lookup($1.str)->offset;
+                                        sprintf(CommentBuffer, "Load RHS value of array variable \"%s\" with base address %d", $1.str, base_address);
+
+                                        emitComment(CommentBuffer);
+
+                                        //Store final value in here
+                                        int final_reg = NextRegister();
+
+                                        // Load Constant 4 into a register
+                                        int four_reg = NextRegister();
+                                        emit(NOLABEL, LOADI, 4, four_reg, EMPTY);
+
+                                        // Get register the index is stored in [exp]
+                                        int constant_reg = $3.targetRegister;
+
+                                        // Compute the total offset by multilying the index * 4
+                                        int mult_offset_reg = NextRegister();
+                                        emit(NOLABEL, MULT, constant_reg, four_reg, mult_offset_reg);
+                                        
+                                        //Load Base address
+                                        int base_addr_reg = NextRegister();
+                                        emit(NOLABEL, LOADI, base_address, base_addr_reg, EMPTY);
+
+                                        //Compute Total Offset by adding mult_offset and base address
+                                        int total_addr_reg = NextRegister();
+                                        emit(NOLABEL, ADD, base_addr_reg, mult_offset_reg, total_addr_reg);
+
+                                        //add total offset to base addr r0(1024) to get actual value
+                                        emit(NOLABEL, LOADAO, 0, total_addr_reg, final_reg);
+
+                                        $$.targetRegister = final_reg;
+                                        $$.type = lookup($1.str)->type;
+
+                                }
  
 
 
@@ -416,7 +488,11 @@ condexp	: exp NEQ exp		{  }
                                         $$.targetReg = newReg;
                                  }
 
-        | exp LEQ exp		{  }
+        | exp LEQ exp		{ //MUST BE INTEGERS
+                                        int newReg = NextRegister();
+                                        emit(NOLABEL, CMPLE, $1.targetRegister, $3.targetRegister, newReg);
+
+                                        $$.targetReg = newReg; }
 
 	| exp GT exp		{  }
 
