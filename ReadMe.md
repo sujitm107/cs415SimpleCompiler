@@ -8,3 +8,9 @@ Sujit Molleti (Section 5), NetID: ssm189
 ```code
 ./codegen < testcases/demo1	
 ```
+This will generate ILOC code in iloc.out
+
+##Test
+To verify the correctness of the code. Use the ILOC simulator.
+Example Usage: 
+```./sim < iloc.out```
