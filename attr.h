@@ -11,11 +11,12 @@ typedef union {int num; char *str;} tokentype;
 
 typedef enum type_expression {TYPE_INT=0, TYPE_BOOL, TYPE_ERROR} Type_Expression;
 
-typedef enum var_Type { TYPE_SCALAR=0, TYPE_ARRAY } Var_Type;
+typedef enum var_Type { TYPE_SCALAR=0, TYPE_ARRAY, TYPE_UNDEFINED } Var_Type;
 
 typedef struct {
         Type_Expression type;
         int targetRegister;
+        Var_Type varType;
         } regInfo;
 
 // My Declarations
@@ -52,6 +53,7 @@ typedef struct ifHeadType{
 
 typedef struct condExp{
         int targetReg;
+        Type_Expression type;
 } condExp;
 
 typedef struct type{

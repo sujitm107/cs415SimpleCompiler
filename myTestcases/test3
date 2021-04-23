@@ -1,0 +1,8 @@
+program main;
+var i: boolean;
+    a: array[10] of integer;
+	x: integer;
+begin
+  a[i] = 1;
+  x[4] = 5
+end.

@@ -77,7 +77,11 @@ vardcls	: vardcls vardcl ';' { }
 vardcl	: idlist ':' type { 
                 varNode* ptr = $1->head;
                 while(ptr != NULL){
-                        insert(ptr->name, $3.baseType, NextOffset($3.varSize), $3.varType);
+                        if(lookup(ptr->name) != NULL){
+                                printf("\n***ERROR: duplicate declaration of %s\n", ptr->name);
+                        } else {
+                                insert(ptr->name, $3.baseType, NextOffset($3.varSize), $3.varType);
+                        }
                         // NextOffset($3.varSize - 1); //allocate space for entire array if necessary, if it is scalar, the line is negated by the -1 as the scalar's varSize is 1
                         ptr = ptr->next;
                 }
@@ -97,7 +101,10 @@ idlist	: idlist ',' ID {     varList_insert($1, $3.str);
 	;
 
 
-type	: ARRAY '[' ICONST ']' OF stype { $$.varType = TYPE_ARRAY; $$.baseType = $6; $$.varSize = $3.num;}
+type	: ARRAY '[' ICONST ']' OF stype { 
+        
+                $$.varType = TYPE_ARRAY; $$.baseType = $6; $$.varSize = $3.num;
+        }
 
         | stype { $$.varType = TYPE_SCALAR; $$.baseType = $1; $$.varSize = 1;}
 	;
@@ -153,7 +160,9 @@ ifhead : IF {
 
         } 
         condexp { /*DEPENING ON TARGETREG INFO CBR TO TRUE LABEL OR FALSE LABEL */
-
+                        // if($$.type != TYPE_BOOL){
+                        //         printf("\n***ERROR: exp in if stmt must be boolean\n");
+                        // }
 
                         emit(NOLABEL, CBR, $3.targetReg, $1.trueLabel, $1.falseLabel);
                         $$.trueLabel = $1.trueLabel;
@@ -161,7 +170,12 @@ ifhead : IF {
                 }
         ;
 
-writestmt: PRT '(' exp ')' { int printOffset = -4; /* default location for printing */
+writestmt: PRT '(' exp ')' { 
+                        if($3.type != TYPE_INT){
+                                printf("\n***Error: illegal type for write\n");
+                        }
+                        
+                        int printOffset = -4; /* default location for printing */
   	                         sprintf(CommentBuffer, "Code for \"PRINT\" from offset %d", printOffset);
 	                         emitComment(CommentBuffer);
                                  emit(NOLABEL, STOREAI, $3.targetRegister, 0, printOffset);
@@ -222,7 +236,12 @@ fstmt	: FOR {
 astmt : lhs ASG exp             { 
  				  if (! ((($1.type == TYPE_INT) && ($3.type == TYPE_INT)) || 
 				         (($1.type == TYPE_BOOL) && ($3.type == TYPE_BOOL)))) {
-				    printf("*** ERROR ***: Assignment types do not match.\n");
+				    printf("\n***ERROR: assignment types do not match.\n");
+				  }
+                                
+                                // ***ERROR: assignment to whole array
+                                  if ($1.varType == TYPE_ARRAY) {
+				    printf("\n***ERROR: assignment to whole array.\n");
 				  }
 
 				  emit(NOLABEL,
@@ -236,17 +255,20 @@ astmt : lhs ASG exp             {
 lhs	: ID			{ /* BOGUS  - needs to be fixed */
                                   int newReg1 = NextRegister();
                                   int newReg2 = NextRegister();
-                                  int offset = lookup($1.str) != NULL ? lookup($1.str)->offset : NextOffset(1);
+                                  
+                                  if(lookup($1.str) == NULL){
+                                          printf("\n***ERROR: undeclared identifier %s\n", $1.str);
+                                          
+                                  }
 
+                                  int offset = lookup($1.str) != NULL ? lookup($1.str)->offset : NextOffset(1);
+                                  
                                   sprintf(CommentBuffer, "Compute address of variable \"%s\" with base address %d", $1.str, offset);
 	                         emitComment(CommentBuffer);
-				  
-                                  $$.targetRegister = newReg2;
-                                  $$.type = lookup($1.str)->type;
 
-                                  if(lookup($1.str) == NULL){
-				        insert($1.str, TYPE_INT, offset, TYPE_SCALAR);
-                                  } 
+                                  $$.targetRegister = newReg2;
+                                  $$.type = lookup($1.str) != NULL ? lookup($1.str)->type : TYPE_ERROR;
+                                  $$.varType = lookup($1.str) != NULL ? lookup($1.str)->varType : TYPE_UNDEFINED; 
 				   
 				  emit(NOLABEL, LOADI, offset, newReg1, EMPTY);
 				  emit(NOLABEL, ADD, 0, newReg1, newReg2);
@@ -260,6 +282,14 @@ lhs	: ID			{ /* BOGUS  - needs to be fixed */
                                         sprintf(CommentBuffer, "Compute address of array \"%s\" with base address %d", $1.str, base_address);
 
                                         emitComment(CommentBuffer);
+
+                                        if($3.type != TYPE_INT){
+                                                printf("\n***ERROR: subscript exp not type integer\n");
+                                        }
+
+                                        if(lookup($1.str)->varType != TYPE_ARRAY){
+                                                printf("\n***ERROR: id %s is not an array\n", $1.str);
+                                        }
 
                                         //Store final value in here
                                         int final_reg = NextRegister();
@@ -287,7 +317,8 @@ lhs	: ID			{ /* BOGUS  - needs to be fixed */
                                         emit(NOLABEL, ADD, 0, total_addr_reg, final_reg);
 
                                         $$.targetRegister = final_reg;
-                                        $$.type = lookup($1.str)->type;
+                                        $$.type = lookup($1.str) != NULL ? lookup($1.str)->type : TYPE_ERROR;
+                                        $$.varType = lookup($1.str) != NULL ? lookup($1.str)->varType : TYPE_UNDEFINED; 
          
 
                                   }
@@ -297,7 +328,7 @@ lhs	: ID			{ /* BOGUS  - needs to be fixed */
 exp	: exp '+' exp		{ int newReg = NextRegister();
 
                                   if (! (($1.type == TYPE_INT) && ($3.type == TYPE_INT))) {
-    				    printf("*** ERROR ***: Operator types must be integer.\n");
+    				    printf("\n***ERROR: types of operands for operation + do not match\n");
                                   }
                                   $$.type = $1.type;
 
@@ -311,7 +342,7 @@ exp	: exp '+' exp		{ int newReg = NextRegister();
 
         | exp '-' exp		{ int newReg = NextRegister();
                                         if(! (($1.type == TYPE_INT) && ($3.type == TYPE_INT))) {
-                                          printf("\n***Error: types of operands for operation '-' do not match\n");
+                                          printf("\n***ERROR: types of operands for operation - do not match\n");
                                         }
 
                                         $$.type = $1.type;
@@ -326,7 +357,7 @@ exp	: exp '+' exp		{ int newReg = NextRegister();
 
         | exp '*' exp		{ int newReg = NextRegister();
                                         if(! (($1.type == TYPE_INT) && ($3.type == TYPE_INT))) {
-                                          printf("\n***Error: types of operands for operation '-' do not match\n");
+                                          printf("\n***ERROR: types of operands for operation * do match\n");
                                         }
 
                                         $$.type = $1.type;
@@ -342,7 +373,7 @@ exp	: exp '+' exp		{ int newReg = NextRegister();
         | exp AND exp		{ int newReg = NextRegister();
 
                                   if (! (($1.type == TYPE_BOOL) && ($3.type == TYPE_BOOL))){
-    				    printf("*** ERROR ***: Operator types must be Boolean.\n");
+    				    printf("***ERROR: types of operands for operation AND do not match\n");
                                   }
                                   $$.type = $1.type;
 
@@ -358,7 +389,7 @@ exp	: exp '+' exp		{ int newReg = NextRegister();
         | exp OR exp       	{ int newReg = NextRegister();
 
                                   if (! (($1.type == TYPE_BOOL) && ($3.type == TYPE_BOOL))) {
-    				    printf("*** ERROR ***: Operator types must be Boolean.\n");
+    				    printf("\n***ERROR: types of operands for operation OR do not match\n");
                                   }
                                   $$.type = $1.type;
 
@@ -375,7 +406,8 @@ exp	: exp '+' exp		{ int newReg = NextRegister();
 	                          int newReg = NextRegister();
                                   
                                   if( lookup($1.str) == NULL){
-                                        printf("\n***Error: undeclared identifier \"%s\"\n", $1.str);
+                                        printf("\n***ERROR: undeclared identifier \"%s\"\n", $1.str);
+                                        
                                   } 
 
                                   int offset = lookup($1.str) != NULL ? lookup($1.str)->offset : NextOffset(1);
@@ -384,7 +416,7 @@ exp	: exp '+' exp		{ int newReg = NextRegister();
 	                         emitComment(CommentBuffer);
 
 	                          $$.targetRegister = newReg;
-                                  $$.type = lookup($1.str)->type;
+                                  $$.type = lookup($1.str) != NULL ? lookup($1.str)->type : TYPE_ERROR;
 				//   $$.type = TYPE_INT;
 
 				  emit(NOLABEL, LOADAI, 0, offset, newReg);
@@ -396,6 +428,14 @@ exp	: exp '+' exp		{ int newReg = NextRegister();
                                         sprintf(CommentBuffer, "Load RHS value of array variable \"%s\" with base address %d", $1.str, base_address);
 
                                         emitComment(CommentBuffer);
+
+                                        if($3.type != TYPE_INT){
+                                                printf("\n***ERROR: subscript exp not type integer\n");
+                                        }
+
+                                        if(lookup($1.str)->varType != TYPE_ARRAY){
+                                                printf("\n***ERROR: id %s is not an array\n", $1.str);
+                                        }
 
                                         //Store final value in here
                                         int final_reg = NextRegister();
@@ -462,6 +502,13 @@ ctrlexp	: ID ASG ICONST ',' ICONST {
                                 // Load In start and end bound
                                 int start = $3.num;
                                 int end = $5.num;
+
+                                if( start > end){
+                                        printf("\n***ERROR: lower bound exceeds upper bound\n");
+                                }
+                                if( lookup($1.str)->varType != TYPE_SCALAR ) {
+                                        printf("\n***ERROR: induction variable %s not scalar integer variable\n", $1.str);
+                                }
                                 
                                 int startReg = NextRegister();
                                 int endReg = NextRegister();
@@ -477,11 +524,37 @@ ctrlexp	: ID ASG ICONST ',' ICONST {
                         }
         ;
 
-condexp	: exp NEQ exp		{  } 
+condexp	: exp NEQ exp		{ 
+                                        if (! ((($1.type == TYPE_INT) && ($3.type == TYPE_INT)) ||
+                                        (($1.type == TYPE_BOOL) && ($3.type == TYPE_BOOL)))) {
+                                                printf("\n***ERROR: types of operrands for operation != do not match\n");
+                                        }
 
-        | exp EQ exp		{  } 
+                                        int newReg = NextRegister();
+                                        emit(NOLABEL, CMPNE, $1.targetRegister, $3.targetRegister, newReg);
+
+                                        $$.targetReg = newReg; 
+
+                                } 
+
+        | exp EQ exp		{  
+                                        if (! ((($1.type == TYPE_INT) && ($3.type == TYPE_INT)) ||
+                                        (($1.type == TYPE_BOOL) && ($3.type == TYPE_BOOL)))) {
+                                                printf("\n***ERROR: types of operrands for operation == do not match\n");
+                                        }
+
+                                        int newReg = NextRegister();
+                                        emit(NOLABEL, CMPEQ, $1.targetRegister, $3.targetRegister, newReg);
+
+                                        $$.targetReg = newReg; 
+
+                                } 
 
         | exp LT exp		{//MUST BE INTEGERS
+
+                                        if (! (($1.type == TYPE_INT) && ($3.type == TYPE_INT))) {
+                                                printf("\n***ERROR: types of operrands for operation < do not match\n");
+                                        }
                                         int newReg = NextRegister();
                                         emit(NOLABEL, CMPLT, $1.targetRegister, $3.targetRegister, newReg);
 
@@ -489,14 +562,38 @@ condexp	: exp NEQ exp		{  }
                                  }
 
         | exp LEQ exp		{ //MUST BE INTEGERS
+                                        if (! (($1.type == TYPE_INT) && ($3.type == TYPE_INT))) {
+                                                printf("\n***ERROR: types of operrands for operation <= do not match\n");
+                                        }
                                         int newReg = NextRegister();
                                         emit(NOLABEL, CMPLE, $1.targetRegister, $3.targetRegister, newReg);
 
-                                        $$.targetReg = newReg; }
+                                        $$.targetReg = newReg; 
+                                }
 
-	| exp GT exp		{  }
+	| exp GT exp		{ 
+                                        if (! (($1.type == TYPE_INT) && ($3.type == TYPE_INT))) {
+                                                printf("\n***ERROR: types of operrands for operation <= do not match\n");
+                                        }
 
-	| exp GEQ exp		{  }
+                                        int newReg = NextRegister();
+                                        emit(NOLABEL, CMPGT, $1.targetRegister, $3.targetRegister, newReg);
+
+                                        $$.targetReg = newReg; 
+                                }
+
+	| exp GEQ exp		{ 
+                                        if (! (($1.type == TYPE_INT) && ($3.type == TYPE_INT))) {
+                                                printf("\n***ERROR: types of operrands for operation <= do not match\n");
+                                        }
+
+                                        int newReg = NextRegister();
+                                        emit(NOLABEL, CMPGE, $1.targetRegister, $3.targetRegister, newReg);
+
+                                        $$.targetReg = newReg; 
+
+
+                                }
 
 	| error { yyerror("***Error: illegal conditional expression\n");}  
         ;
