@@ -10,7 +10,7 @@ Sujit Molleti (Section 5), NetID: ssm189
 ```
 This will generate ILOC code in iloc.out
 
-##Test
+## Test
 To verify the correctness of the code. Use the ILOC simulator.
 Example Usage: 
 ```./sim < iloc.out```
