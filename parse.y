@@ -20,6 +20,9 @@ char *CommentBuffer;
 
         fstmt forstmt;
         cntrlExp controlStmt;
+        condExp conditionStmt;
+        ifStmtType ifStmt;
+        ifHeadType ifHead;
        }
 
 %token PROG PERIOD VAR 
@@ -39,6 +42,9 @@ char *CommentBuffer;
 %type <tex> type
 %type <forstmt> FOR
 %type <controlStmt> ctrlexp
+%type <conditionStmt> condexp
+%type <ifStmt> IF
+%type <ifHead> ifhead
 
 %start program
 
@@ -117,15 +123,40 @@ stmt    : ifstmt { }
 cmpdstmt: BEG stmtlist END { }
 	;
 
-ifstmt :  ifhead 
-          THEN
+ifstmt :  ifhead { $1.followLabel = NextLabel(); }
+          THEN {/* NEXTLABEL() L0 */ emit($1.trueLabel, NOP, EMPTY, EMPTY, EMPTY);
+                sprintf(CommentBuffer, "This is the \"true\" Branch");
+                emitComment(CommentBuffer);
+          }
+          stmt {/* GO TO BRANCH AFTER ELSE STMT */ 
+                sprintf(CommentBuffer, "Branch to statement following the \"else\" statement list");
+                emitComment(CommentBuffer);
+                emit(NOLABEL, BR, $1.followLabel, EMPTY, EMPTY);
+          }
+  	  ELSE {/* NEXTLABEL() L1 */ emit($1.falseLabel, NOP, EMPTY, EMPTY, EMPTY); 
+                sprintf(CommentBuffer, "This is the \"false\" Branch");
+                emitComment(CommentBuffer);
+            }
           stmt 
-  	  ELSE 
-          stmt 
-          FI
+          FI {/*NEXTLABEL() L2 */ emit($1.followLabel, NOP, EMPTY, EMPTY, EMPTY);} 
 	;
 
-ifhead : IF condexp {  }
+ifhead : IF {
+                //Declare Labels
+                int trueLabel = NextLabel();
+                int falseLabel = NextLabel();
+
+                $1.trueLabel = trueLabel;
+                $1.falseLabel = falseLabel;
+
+        } 
+        condexp { /*DEPENING ON TARGETREG INFO CBR TO TRUE LABEL OR FALSE LABEL */
+
+
+                        emit(NOLABEL, CBR, $3.targetReg, $1.trueLabel, $1.falseLabel);
+                        $$.trueLabel = $1.trueLabel;
+                        $$.falseLabel = $1.falseLabel;
+                }
         ;
 
 writestmt: PRT '(' exp ')' { int printOffset = -4; /* default location for printing */
@@ -378,7 +409,12 @@ condexp	: exp NEQ exp		{  }
 
         | exp EQ exp		{  } 
 
-        | exp LT exp		{  }
+        | exp LT exp		{//MUST BE INTEGERS
+                                        int newReg = NextRegister();
+                                        emit(NOLABEL, CMPLT, $1.targetRegister, $3.targetRegister, newReg);
+
+                                        $$.targetReg = newReg;
+                                 }
 
         | exp LEQ exp		{  }
 

@@ -93,9 +93,12 @@ tokentype token;
 
         fstmt forstmt;
         cntrlExp controlStmt;
+        condExp conditionStmt;
+        ifStmtType ifStmt;
+        ifHeadType ifHead;
        
 
-#line 99 "parse.tab.h" /* yacc.c:1909  */
+#line 102 "parse.tab.h" /* yacc.c:1909  */
 };
 
 typedef union YYSTYPE YYSTYPE;

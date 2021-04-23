@@ -36,6 +36,21 @@ typedef struct cntrlExp{
         int upperBoundReg;
 } cntrlExp;
 
+typedef struct ifStmtType{
+        int trueLabel;
+        int falseLabel;
+} ifStmtType;
+
+typedef struct ifHeadType{
+        int trueLabel;
+        int falseLabel;
+        int followLabel;
+} ifHeadType;
+
+typedef struct condExp{
+        int targetReg;
+} condExp;
+
 void varList_insert(varList *list, char* var);
 void varList_printList(varList *list);
 
