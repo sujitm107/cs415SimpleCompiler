@@ -8,7 +8,7 @@
 	// Compute address of variable "b" at offset 0 in register 5
  	 loadI 0 	=> r4 
  	 add r0, r4 	=> r5 
- 	 loadI 10 	=> r6 
+ 	 loadI 2 	=> r6 
  	 store r6 	=> r5 
 	// Compute address of variable "a" at offset 4 in register 8
  	 loadI 4 	=> r7 
@@ -19,16 +19,12 @@
  	 loadAI r0, 0 	=> r10 
  	 add r9, r10 	=> r11 
  	 store r11 	=> r8 
-	// Compute address of variable "b" at offset 0 in register 13
- 	 loadI 0 	=> r12 
- 	 add r0, r12 	=> r13 
-	// Load RHS value of variable "b" at offset 0
- 	 loadAI r0, 0 	=> r14 
- 	 loadI 1 	=> r15 
- 	 add r14, r15 	=> r16 
- 	 store r16 	=> r13 
 	// Load RHS value of variable "a" at offset 4
- 	 loadAI r0, 4 	=> r17 
+ 	 loadAI r0, 4 	=> r12 
 	// Code for "PRINT" from offset -4
- 	 storeAI r17 	=> r0, -4 
+ 	 storeAI r12 	=> r0, -4 
+ 	 outputAI r0, -4
+ 	 loadI 5 	=> r13 
+	// Code for "PRINT" from offset -4
+ 	 storeAI r13 	=> r0, -4 
  	 outputAI r0, -4

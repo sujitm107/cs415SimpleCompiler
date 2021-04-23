@@ -17,6 +17,9 @@ char *CommentBuffer;
         // My declarations
         varList *vList;
         Type_Expression tex;
+
+        fstmt forstmt;
+        cntrlExp controlStmt;
        }
 
 %token PROG PERIOD VAR 
@@ -34,6 +37,8 @@ char *CommentBuffer;
 %type <vList> idlist
 %type <tex> stype
 %type <tex> type
+%type <forstmt> FOR
+%type <controlStmt> ctrlexp
 
 %start program
 
@@ -72,17 +77,13 @@ vardcl	: idlist ':' type {
         }
 	;
 
-idlist	: idlist ',' ID { printf("Running idlist \"%s\" ", $3.str); 
-                                varList_insert($1, $3.str);
-                                varList_printList($1);
+idlist	: idlist ',' ID {     varList_insert($1, $3.str);
+                                // varList_printList($1);
                                 $$ = $1;
                         }
-        | ID		{ printf("Running idlist \"%s\" ", $1.str);
-                                varList* list = malloc(sizeof(varList));
+        | ID		{varList* list = malloc(sizeof(varList));
                                 list->head = NULL;
                                 varList_insert(list, $1.str);
-                                
-                                printf("\nAdding Node: \"%s\"\n", list->head->name);
                                 $$ = list;
                          } 
 	;
@@ -139,8 +140,48 @@ writestmt: PRT '(' exp ')' { int printOffset = -4; /* default location for print
                                }
 	;
 
-fstmt	: FOR ctrlexp DO stmt { }
-          ENDFOR
+fstmt	: FOR {
+                sprintf(CommentBuffer, "Control For \"FOR\" Statement"); emitComment(CommentBuffer); 
+
+                // Regiseters 7 8 should be declared here?
+
+                int decLabel = NextLabel();
+                int trueLabel = NextLabel();
+                int falseLabel = NextLabel();
+
+                $1.decLabel = decLabel;
+                $1.trueLabel = trueLabel;
+                $1.falseLabel = falseLabel;
+
+        } ctrlexp { 
+                
+                int offset = lookup($3.indexStr)->offset; //Swap with offset of i which is saved in ctrlexp
+                int newReg = NextRegister(); 
+                int upperBoundReg = $3.upperBoundReg; // NextRegister(); //Swap with Ctrl Upper
+                int decLabel = $1.decLabel; //Swap with For Dec Label
+                emit(decLabel, LOADAI, 0, offset, newReg);
+
+                int newReg2 = NextRegister();
+                emit(NOLABEL, CMPLE, newReg, upperBoundReg, newReg2);
+
+                int trueLabel = $1.trueLabel; // Swap with For True Label
+                int falseLabel = $1.falseLabel; // Swap with For False Label
+
+                emit(NOLABEL, CBR, newReg2, trueLabel, falseLabel);
+        }
+        DO {emit($1.trueLabel, NOP, EMPTY, EMPTY, EMPTY);} 
+        stmt { 
+                int currIndexReg = NextRegister();
+                int newIndexReg = NextRegister();
+
+                //Incrementing I
+                int offset = lookup($3.indexStr)->offset; // offset of i
+                emit(NOLABEL, LOADAI, 0, offset, currIndexReg);
+                emit(NOLABEL, ADDI, currIndexReg, 1, newIndexReg);
+                emit(NOLABEL, STOREAI, newIndexReg, 0, offset);
+                emit(NOLABEL, BR, $1.decLabel, EMPTY, EMPTY);
+         }
+          ENDFOR {emit($1.falseLabel, NOP, EMPTY, EMPTY, EMPTY);}
 	;
 
 
@@ -168,7 +209,6 @@ lhs	: ID			{ /* BOGUS  - needs to be fixed */
 	                         emitComment(CommentBuffer);
 				  
                                   $$.targetRegister = newReg2;
-
                                   $$.type = lookup($1.str)->type;
 
                                   if(lookup($1.str) == NULL){
@@ -215,7 +255,20 @@ exp	: exp '+' exp		{ int newReg = NextRegister();
                                                 newReg);
                                  }
 
-        | exp '*' exp		{  }
+        | exp '*' exp		{ int newReg = NextRegister();
+                                        if(! (($1.type == TYPE_INT) && ($3.type == TYPE_INT))) {
+                                          printf("\n***Error: types of operands for operation '-' do not match\n");
+                                        }
+
+                                        $$.type = $1.type;
+
+                                        $$.targetRegister = newReg;
+                                        emit(NOLABEL, 
+                                                MULT, 
+                                                $1.targetRegister, 
+                                                $3.targetRegister, 
+                                                newReg); 
+                                }
 
         | exp AND exp		{ int newReg = NextRegister();
 
@@ -283,7 +336,7 @@ exp	: exp '+' exp		{ int newReg = NextRegister();
 				   $$.type = TYPE_BOOL;
 				   emit(NOLABEL, LOADI, 1, newReg, EMPTY); }
 
-        | FALSE                   { int newReg = NextRegister(); /* TRUE is encoded as value '0' */
+        | FALSE                   { int newReg = NextRegister(); /* FALSE is encoded as value '0' */
 	                           $$.targetRegister = newReg;
 				   $$.type = TYPE_BOOL;
 				   emit(NOLABEL, LOADI, 0, newReg, EMPTY); }
@@ -292,7 +345,33 @@ exp	: exp '+' exp		{ int newReg = NextRegister();
 	;
 
 
-ctrlexp	: ID ASG ICONST ',' ICONST { }
+ctrlexp	: ID ASG ICONST ',' ICONST { 
+                                sprintf(CommentBuffer, "Initialize ind. variable \"%s\" at offset X with lower bound value %d", $1.str, $3);
+                                emitComment(CommentBuffer); 
+
+                                int offset = lookup($1.str) != NULL ? lookup($1.str)->offset : NextOffset(1);
+                                int newReg = NextRegister(); //offset of i
+                                emit(NOLABEL, LOADI, offset, newReg, EMPTY);
+
+                                int memReg = NextRegister(); //mem addr for i
+                                emit(NOLABEL, ADD, 0, newReg, memReg);
+
+                                // Load In start and end bound
+                                int start = $3.num;
+                                int end = $5.num;
+                                
+                                int startReg = NextRegister();
+                                int endReg = NextRegister();
+
+                                emit(NOLABEL, LOADI, start, startReg, EMPTY);
+                                emit(NOLABEL, LOADI, end, endReg, EMPTY);
+
+                                emit(NOLABEL, STORE, startReg, memReg, EMPTY);
+
+                                $$.indexStr = $1.str;
+                                $$.upperBoundReg = endReg;
+        
+                        }
         ;
 
 condexp	: exp NEQ exp		{  } 

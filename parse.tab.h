@@ -90,9 +90,12 @@ tokentype token;
         // My declarations
         varList *vList;
         Type_Expression tex;
+
+        fstmt forstmt;
+        cntrlExp controlStmt;
        
 
-#line 96 "parse.tab.h" /* yacc.c:1909  */
+#line 99 "parse.tab.h" /* yacc.c:1909  */
 };
 
 typedef union YYSTYPE YYSTYPE;

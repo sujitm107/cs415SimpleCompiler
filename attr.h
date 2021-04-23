@@ -25,6 +25,17 @@ typedef struct varList {
         varNode *head;
 } varList;
 
+typedef struct fstmt {
+        int decLabel;
+        int trueLabel;
+        int falseLabel;
+} fstmt;
+
+typedef struct cntrlExp{
+        char* indexStr;
+        int upperBoundReg;
+} cntrlExp;
+
 void varList_insert(varList *list, char* var);
 void varList_printList(varList *list);
 
